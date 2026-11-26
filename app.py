@@ -211,6 +211,26 @@ def auth_worker():
  try:AUTH_RESULT=svc.plan('signin',timeout=310)
  except Exception as e:AUTH_RESULT={'status':'error','error':str(e)[:100]}
  finally:AUTH_BUSY=False
+def notebook_catalog():
+ base=(ROOT/'notebook-workspace').resolve()
+ records=[]
+ for manifest in sorted(base.glob('*/integrated-media.json')):
+  if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}',manifest.parent.name):continue
+  try:
+   if manifest.resolve().parent!=manifest.parent or manifest.stat().st_size>100000:continue
+   data=json.loads(manifest.read_text(encoding='utf-8'))
+   if data.get('status')!='preview_only' or data.get('publication_approved') is not False:continue
+   item={'project':manifest.parent.name,'status':'preview_only','media':{}}
+   for kind in ('audio','video'):
+    m=data['media'][kind];folder=m['folder'];output=m['output']
+    if not re.fullmatch(r'media-[a-f0-9]{12}',folder):raise ValueError('Invalid media directory')
+    if output!= {'audio':'preview-audio.wav','video':'preview-vertical.mp4'}[kind]:raise ValueError('Invalid filename')
+    p=base/folder/output
+    if p.resolve()!=p or not p.is_file() or m.get('decode_pass') is not True:raise ValueError('Media unavailable')
+    item['media'][kind]={'source':m['source'],'duration_seconds':m['processed']['duration_seconds'],'resolution':m['processed']['resolution'],'integrated_lufs':m['processed']['integrated_lufs'],'true_peak_dbtp':m['processed']['true_peak_dbtp'],'folder':folder}
+   records.append(item)
+  except (OSError,ValueError,KeyError,TypeError):continue
+ return records
 class Handler(BaseHTTPRequestHandler):
  def reply(self,body,typ='application/json',status=200):
   self.send_response(status);self.send_header('Content-Type',typ);self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
@@ -220,6 +240,7 @@ class Handler(BaseHTTPRequestHandler):
   if not self.valid():return self.js({'error':'Forbidden host'},403)
   if self.path=='/':return self.reply((ROOT/'office.html').read_bytes(),'text/html; charset=utf-8')
   if self.path=='/state':return self.js(getstate())
+  if self.path=='/notebook/catalog':return self.js({'projects':notebook_catalog()})
   if self.path=='/chatgpt/status':
    if AUTH_BUSY:return self.js({'status':'connecting','sharing':False})
    try:return self.js(svc.plan('status'))
@@ -245,6 +266,16 @@ class Handler(BaseHTTPRequestHandler):
    if AUTH_BUSY or (CURRENT and CURRENT['status']=='running'):return self.js({'error':'Studio busy'},409)
    try:return self.js(svc.plan('disconnect'))
    except Exception:return self.js({'error':'Disconnect failed'},400)
+  m=re.fullmatch(r'/notebook/open/([a-zA-Z0-9_-]{1,64})/(audio|video|report)',self.path)
+  if m:
+   try:
+    item=next(x for x in notebook_catalog() if x['project']==m[1])
+    base=(ROOT/'notebook-workspace').resolve()
+    p=base/(item['project'] if m[2]=='report' else item['media'][m[2]]['folder'])
+    if p.resolve()!=p or not p.is_dir():raise ValueError('Invalid path')
+    os.startfile(str(p))
+    return self.js({'status':'open_requested'},202)
+   except (OSError,ValueError,StopIteration):return self.js({'error':'Media folder unavailable'},404)
   if self.path=='/notebook/launch':
    try:
     subprocess.Popen([sys.executable,'-B',str(ROOT/'notebook_bridge.py')],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
