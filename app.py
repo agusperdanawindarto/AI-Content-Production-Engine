@@ -245,6 +245,11 @@ class Handler(BaseHTTPRequestHandler):
    if AUTH_BUSY or (CURRENT and CURRENT['status']=='running'):return self.js({'error':'Studio busy'},409)
    try:return self.js(svc.plan('disconnect'))
    except Exception:return self.js({'error':'Disconnect failed'},400)
+  if self.path=='/notebook/launch':
+   try:
+    subprocess.Popen([sys.executable,'-B',str(ROOT/'notebook_bridge.py')],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    return self.js({'status':'launch_requested'},202)
+   except Exception:return self.js({'error':'Notebook Bridge launch failed'},500)
   if self.path!='/run':return self.js({'error':'Not found'},404)
   try:
    n=int(self.headers.get('Content-Length','0'))

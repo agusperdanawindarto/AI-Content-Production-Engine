@@ -12,3 +12,6 @@ __pycache__/
 *.mp4
 *.wav
 *.log
+
+notebook-workspace/
+studio.ico

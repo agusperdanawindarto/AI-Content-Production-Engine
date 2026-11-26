@@ -19,3 +19,16 @@ if($check.TargetPath -ne $launcher){throw 'Shortcut verification failed'}
 Write-Output "Desktop shortcut verified: $path"
 Write-Output "Target: $($check.TargetPath)"
 Write-Output "Icon: $($check.IconLocation)"
+
+$bridge=Join-Path $root 'START-NOTEBOOK-BRIDGE.cmd'
+if(Test-Path $bridge){
+ $bp=Join-Path $desktop 'Notebook Media Bridge.lnk'
+ $bl=$shell.CreateShortcut($bp)
+ $bl.TargetPath=$bridge
+ $bl.WorkingDirectory=$root
+ $bl.IconLocation="$icon,0"
+ $bl.Description='Notebook Media Bridge - local preview and analytics'
+ $bl.Save()
+ if($shell.CreateShortcut($bp).TargetPath -ne $bridge){throw 'Notebook shortcut verification failed'}
+ Write-Output "Notebook shortcut verified: $bp"
+}
