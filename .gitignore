@@ -1,0 +1,13 @@
+vendor/
+tmp/
+workspace/
+assets/*.png
+assets/*.jpg
+assets/*.wav
+.env
+.env.*
+__pycache__/
+*.pyc
+*.mp4
+*.wav
+*.log
