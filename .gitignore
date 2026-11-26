@@ -1,6 +1,7 @@
 vendor/
 tmp/
 workspace/
+private/
 assets/*.png
 assets/*.jpg
 assets/*.wav

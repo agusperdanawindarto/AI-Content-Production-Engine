@@ -1,24 +1,31 @@
-# AI Content Production Engine - Virtual Studio v0.1
+# AI Content Production Engine — Virtual Studio v0.2
 
-A lightweight, standalone Windows FB Pro production workstation. 10 roles emit actual task events, persisted in each job's state.json. The pixel-style office reflects those events; fast tasks may complete between UI polls. No agent claims work when idle.
+Windows local FB Pro studio with GPT orchestration, live trend intake, offline Indonesian neural voice and event-driven office. There are 10 roles; the Researcher, Strategist, Script Writer and Policy Auditor call GPT separately in plan/API modes. Other roles are software workers. The workflow is sequential, with recorded artifact handoffs, not autonomous parallel conversations or simulated background activity.
 
-## Run on D:
-1. Clone or download this repository to D:\AI-Content-Production-Engine. Python 3.11 is a prerequisite. Do not install to C:.
-2. Run INSTALL-D.cmd to install dependencies into vendor/ on D:, with temporary files on D:. Existing Python and browser may still use C: for normal OS operations.
-3. Run START-STUDIO.cmd. If browser opens before server, refresh http://127.0.0.1:8899/. Close the server console to stop; interrupted jobs remain recorded. Never expose this local server to the internet.
-4. Choose Demo (built-in storyboard), Manual (paste ChatGPT scene JSON), or API (paid, explicit confirmation). No Desktop Commander required for operation.
-5. Preview the MP4; download subtitle, thumbnail, caption, quality report and policy review. Publish only after owner checks accuracy, asset rights, and Meta disclosure requirements. No automatic Facebook access or publishing.
+## Install on drive D:
+1. Clone/download this project to D:\AI-Content-Production-Engine. Existing Python 3.11, Node.js >=22.12, Git and Windows PowerShell are prerequisites.
+2. Run INSTALL-D.cmd to install rendering dependencies to vendor/. Run INSTALL-VOICE-ID.cmd for the local voice model. Run INSTALL-GPT-PLAN.cmd for the official OpenAI SIWC local DevKit.
+3. Run START-STUDIO.cmd, visit http://127.0.0.1:8899/. Only listen on IPv4 loopback. Do not expose to the internet. All vendor, temp, voice, job data and credential files are stored on D:. Existing Python/browser/Windows may still use C: for normal OS operations.
+4. In the Studio select Continue with ChatGPT, choose your own account/workspace, authorize plan usage, and return to the dashboard. Verify the displayed account and select an available model. Choose GPT plan mode and explicitly permit its plan usage for the job. Manage your allowance via ChatGPT Settings → Usage. Disconnect via the dashboard or revoke in ChatGPT settings.
+5. Alternative modes: Demo (built-in script), Manual (paste 3–6 JSON scenes from a dedicated ChatGPT project chat), API (separate paid API; requires OPENAI_API_KEY and OPENAI_MODEL environment variables and per-job consent).
 
-## AI configuration
-Demo/manual are deterministic local tools, not live AI calls. Manual uses ChatGPT in one project chat, via copy/paste. API mode calls OpenAI Responses separately for Researcher, Strategist, Script Writer and Policy Auditor and Audio Speech for Indonesian voice; other roles are software workers. Set OPENAI_API_KEY and OPENAI_MODEL in the local process environment using your own API account. Do not paste keys into chats or GitHub. Model must support Responses API. No automatic spending until API mode is selected and confirmed. ChatGPT subscription and API billing are separate. API mode has not been validated without credentials; default speech model gpt-4o-mini-tts. No live web research tool is included: researcher makes hypotheses only. Demo/manual use silent audio preview because no installed Indonesian TTS was detected; audio production requires API or a later local Indonesian voice integration.
+## GPT account safety
+Uses official OpenAI Sign in with ChatGPT SDK, pinned source commit 0a36fefeb913055c8c7a1a29b63d82b96b2e841a, with local Windows CurrentUser DPAPI protection for credentials. Browser login/consent is exclusively user-controlled. No access to existing ChatGPT conversations, cookies, passwords or OTP. Identity alone does not enable plan usage. No paid API fallback. ChatGPT plan availability and limits depend on account/workspace. Never upload private/ or credential data. The installer audits runtime dependencies; remediate reported vulnerabilities before enabling sign-in. The SDK's own license and OpenAI SIWC terms apply.
+- https://developers.openai.com/siwc/token-sharing-open-source
+- https://github.com/openai/sign-in-with-chatgpt-devkit
+- https://openai.com/policies/sign-in-with-chatgpt-terms/
 
-## Acceptance test
-Run python -B app.py --demo from this directory. It produces a 720x1280 MP4 with subtitle text burned into cards, SRT, thumbnail, caption, event log and decode check. Optional original sandbox PNGs in assets/uivision-before.png and assets/uivision-after.png; if not supplied, generated illustrative cards are used. Actual account metrics remain unknown. Do not represent illustrative cards as evidence of Facebook performance.
+## Trends
+The public Google Trends Indonesia RSS is queried when the user enables trends. Store timestamped source and titles in trends.json, then pass it as untrusted evidence to GPT in live modes. It measures Google search interest, not Facebook performance or factual proof. A failed feed is explicitly marked unavailable. No Facebook scraping. GPT must not invent source URLs, metrics or earnings. Verify every factual claim before publication.
 
-## Design references (not copied assets)
-- Pixel Agents overview: https://www.youtube.com/watch?v=KtG5Ez7KujE
-- Local real-time agent office: https://www.youtube.com/watch?v=knZuRQi2Gag
-- OpenAI TTS docs: https://developers.openai.com/api/docs/guides/text-to-speech
+## Audio and production
+Demo/manual/ChatGPT plan modes use local Piper Indonesian id_ID news_tts medium, installed separately on D:. The model is for local preview until the owner reviews the dataset license; its model card points to an external dataset license. Do not assume commercial rights. API mode uses OpenAI text-to-speech instead and is separately billed. WAVs are checked for non-silence and video decoded by FFmpeg. Preview video may be shorter than target Reel duration: based on actual narration duration. No Facebook posting. Owner checks accuracy, audio/visual rights and disclosure before uploading.
 
-## Integration
-Previous Control Center at D:\AI-COMPUTER-CONTROL remains independent (Playwright MCP and UI.Vision). Optional human-controlled sandbox capture can be transferred into assets; no dependency on browser automation for render. Owner can import authorized aggregate metrics using the previous fb-insights.py module. This repository contains production source and reproducible installation files, not private account data, screenshots, outputs, secrets, vendor binaries or prior unrelated projects.
+## Virtual office
+Ten characters at individual desks, a meeting room and separate render area. Backend records each completed artifact handoff with sender/receiver. Live rendering displays status; optional labeled replay of recorded handoffs displays the two characters meeting. Rapid stages may complete between polls. This is a lightweight visual representation, not a claim of extra computation.
+- Pixel Agents: https://www.youtube.com/watch?v=KtG5Ez7KujE
+- Local real-time office: https://www.youtube.com/watch?v=knZuRQi2Gag
+
+## Acceptance
+Run node chatgpt-plan.mjs selftest (DPAPI only), python -B studio_services.py --trends, python -B studio_services.py --voice, python -B app.py --demo --trends. Optional browser test: start server, then node test-ui.cjs with PLAYWRIGHT_MODULE set to an existing Playwright installation. Tests check two production jobs, handoff replay, real trend feed, media decode and local consent/origin validation. No authenticated model inference is claimed unless the owner signs in and a real request completes.
+The prior Control Center at D:\AI-COMPUTER-CONTROL remains independent. No DC required during normal Studio operation. Public repository contains source and installers only; private data, credentials, media and model binaries are excluded.
