@@ -57,6 +57,12 @@ def validate(scenes):
  for s in scenes:
   if not isinstance(s,dict) or not isinstance(s.get('title'),str) or not isinstance(s.get('text'),str) or not 1<=len(s['title'])<=65 or not 1<=len(s['text'])<=160:raise ValueError('Invalid scene (title <=65; text <=160)')
  return [{'title':s['title'],'text':s['text']} for s in scenes]
+def validate_narration(scenes):
+ scenes=validate(scenes)
+ for s in scenes:
+  if re.search(r'\b(?:narasi|visual|voiceover|voice-over|shot|teks layar)\s*:',s['text'],re.I) or re.match(r'^\s*\d+\s*[–—-]\s*\d+\s*(?:detik|s\b)',s['title'],re.I):
+   raise ValueError('Narration QA: remove production directions and timestamps from spoken text and title')
+ return scenes
 def write(p,x):p.write_text(x,encoding='utf-8')
 def font(size,bold=False):
  p=Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'/('arialbd.ttf' if bold else 'arial.ttf')
@@ -149,16 +155,16 @@ def pipeline(j,brief,manual):
   handoff(j,'Strategist','Script Writer','strategy.txt')
   def script():
    if live:
-    x=ask('Script Writer','Return only JSON array of 3–6 objects with keys title (<=65 chars), text (<=160 chars). Each scene Indonesian, no fabricated claims. '+strategy,j)
+    x=ask('Script Writer','Return only a JSON array of 3–6 objects with keys title (<=65 chars), text (<=160 chars). title is a short on-screen headline without timestamps. text is ONLY the exact natural Indonesian sentences to speak aloud; never include stage directions, camera instructions, quoted labels such as Narasi:, or directions to display visuals. Renderer uses generic illustrated cards, not actual browser screen recordings: do not imply a recorded demonstration occurred. Use hypothetical examples, avoid fabricated claims and aim for 25–40 seconds total. '+strategy,j)
     x=x.strip()
     if x.startswith('```'):
      x=x.split('\n',1)[1].rsplit('```',1)[0].strip()
-    return validate(json.loads(x))
+    return validate_narration(json.loads(x))
    return validate(manual if mode=='manual' else DEMO)
   scenes=stage(j,'Script Writer','Menyiapkan scene dan narasi',script);write(folder/'script.json',json.dumps(scenes,ensure_ascii=False,indent=2))
   handoff(j,'Script Writer','Policy Auditor','script.json')
   def policy():
-   note=ask('Policy Auditor','Review for deceptive claims, originality, safety and required disclosure. Return a review, do not approve publication. '+json.dumps(scenes,ensure_ascii=False),j) if live else 'Local draft check only; human must verify claims, copyrights, original assets and AI disclosure.'
+   note=ask('Policy Auditor','Review for deceptive claims, originality, safety and required disclosure. Renderer uses illustrative cards, not a verified recording; check that spoken narration contains no production directions or unsupported demonstration claims. Return a review, do not approve publication. '+json.dumps(scenes,ensure_ascii=False),j) if live else 'Local draft check only; human must verify claims, copyrights, original assets and AI disclosure.'
    write(folder/'policy-review.txt',note)
   stage(j,'Policy Auditor','Pemeriksaan awal, bukan izin publikasi',policy)
   handoff(j,'Policy Auditor','Voice Studio','Draf naskah dan policy-review.txt; izin publikasi tetap tertunda')

@@ -32,3 +32,6 @@ The prior Control Center at D:\AI-COMPUTER-CONTROL remains independent. No DC re
 
 ## Desktop shortcut
 Run `python -B make-icon.py` and `powershell -NoProfile -File UPDATE-DESKTOP.ps1` after installation or an icon design change. `START-STUDIO.cmd` refreshes the desktop shortcut on startup and recreates the icon if missing. The shortcut points to the stable D-drive launcher. On OneDrive-managed desktops the small .lnk file may reside on C:, while the icon and program remain on D:.
+
+## Real GPT-plan acceptance
+After a completed GPT-6.2 plan job, run `python -B verify-plan-job.py JOB_ID`. The verifier checks the role completion records, live trend source, actual non-silent WAVs, video hash, artifact existence, and 10 handoffs without making new model calls. `python -B test-narration.py` checks clean spoken text and rejects obvious narration labels and timecoded headlines. A technical pass is not publication approval. The renderer uses illustrative cards for plan-mode content, not genuine screen recordings. Verify content, audio rights, and visual accuracy before posting.
