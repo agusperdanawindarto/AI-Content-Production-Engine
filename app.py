@@ -119,7 +119,7 @@ def speech(folder,scenes,mode):
   with wave.open(str(p),'rb') as w:durations.append(w.getnframes()/w.getframerate())
  return durations,provider
 def ff(args):
- r=subprocess.run([FF,'-hide_banner','-loglevel','error','-y',*args],capture_output=True,text=True,timeout=180)
+ r=subprocess.run([FF,'-hide_banner','-loglevel','error','-y',*args],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),text=True,timeout=180)
  if r.returncode:raise RuntimeError('FFmpeg failed: '+r.stderr[-600:])
 def stamp(t):
  ms=round(t*1000);h,ms=divmod(ms,3600000);m,ms=divmod(ms,60000);s,ms=divmod(ms,1000);return f'{h:02d}:{m:02d}:{s:02d},{ms:03d}'
@@ -137,7 +137,7 @@ def render(folder,scenes,durations,demo):
 def audit(folder,dur,provider):
  p=folder/'reel.mp4'
  def measure(path):
-  r=subprocess.run([FF,'-hide_banner','-i',str(path),'-af','loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json','-f','null','-'],capture_output=True,text=True,timeout=180)
+  r=subprocess.run([FF,'-hide_banner','-i',str(path),'-af','loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json','-f','null','-'],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),text=True,timeout=180)
   if r.returncode or '720x1280' not in r.stderr or 'Audio:' not in r.stderr:raise RuntimeError('Video decode/format check failed')
   q=json.loads(re.findall(r'\{\s*"input_i"[\s\S]*?\}',r.stderr)[-1])
   i,t=float(q['input_i']),float(q['input_tp'])

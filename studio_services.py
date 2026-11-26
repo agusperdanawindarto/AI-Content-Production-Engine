@@ -20,7 +20,7 @@ def plan(action, payload=None, timeout=35):
     env=os.environ.copy()
     for k in ("OPENAI_API_KEY","OPENAI_CUSTOM_HEADERS","OPENAI_BASE_URL","OPENAI_ORGANIZATION","OPENAI_PROJECT","OPENAI_LOG"):
         env.pop(k,None)
-    result=subprocess.run(["node",str(ROOT/"chatgpt-plan.mjs"),action],input=json.dumps(payload or {},ensure_ascii=False),encoding="utf-8",capture_output=True,timeout=timeout,cwd=ROOT,env=env)
+    result=subprocess.run(["node",str(ROOT/"chatgpt-plan.mjs"),action],input=json.dumps(payload or {},ensure_ascii=False),encoding="utf-8",capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),timeout=timeout,cwd=ROOT,env=env)
     try:data=json.loads(result.stdout.strip())
     except ValueError:raise RuntimeError("ChatGPT adapter unavailable") from None
     if result.returncode or data.get("error"):raise RuntimeError("ChatGPT adapter: "+str(data.get("error","failed"))[:100])
@@ -34,7 +34,7 @@ def local_voice(folder,scenes):
     durations=[]
     for i,s in enumerate(scenes):
         p=folder/f"voice-{i:02d}.wav"
-        r=subprocess.run([sys.executable,"-B","-m","piper","--model",str(model),"--output-file",str(p)],input=s["text"],encoding="utf-8",capture_output=True,env=env,cwd=ROOT,timeout=100)
+        r=subprocess.run([sys.executable,"-B","-m","piper","--model",str(model),"--output-file",str(p)],input=s["text"],encoding="utf-8",capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),env=env,cwd=ROOT,timeout=100)
         if r.returncode or not p.is_file():raise RuntimeError("Piper synthesis failed")
         with wave.open(str(p),"rb") as w:
             n=w.getnframes();dur=n/w.getframerate()
