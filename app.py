@@ -128,7 +128,10 @@ def pipeline(j,brief,manual):
   def script():
    if mode=='api':
     x=ask('Script Writer','Return only JSON array of 3–6 objects with keys title (<=65 chars), text (<=160 chars). Each scene Indonesian, no fabricated claims. '+strategy)
-    x=re.sub(r'^\\s*\\x60{3}(?:json)?|\\x60{3}\\s*$','',x.strip());return validate(json.loads(x))
+    x=x.strip()
+    if x.startswith('```'):
+     x=x.split('\n',1)[1].rsplit('```',1)[0].strip()
+    return validate(json.loads(x))
    return validate(manual if mode=='manual' else DEMO)
   scenes=stage(j,'Script Writer','Menyiapkan scene dan narasi',script);write(folder/'script.json',json.dumps(scenes,ensure_ascii=False,indent=2))
   def policy():
@@ -141,7 +144,7 @@ def pipeline(j,brief,manual):
   stage(j,'Analytics','Membuat lembar metrik aktual',lambda:write(folder/'metrics.csv','date,views,reach,watch_seconds,qualified_views,earnings,currency\n'))
   write(folder/'caption.txt',scenes[0]['title']+'\n'+' '.join(s['text'] for s in scenes)+'\n#BelajarAI #Produktivitas\n'+('Narasi dibuat menggunakan AI.\n' if mode=='api' else ''))
   event(j,'Orchestrator','review','Draf selesai; persetujuan manusia diperlukan')
-  j['status']='review';j['quality']=q
+  with LOCK:j['quality']=q;j['status']='review';save(j)
  except Exception as e:
   j['status']='failed';j['error']=type(e).__name__+': '+str(e)[:180];event(j,'Orchestrator','failed','Pipeline dihentikan')
  finally:
@@ -197,6 +200,12 @@ if __name__=='__main__':
   jid=newjob('demo',''); 
   import time
   while CURRENT['status']=='running':time.sleep(.25)
+  with LOCK:save(CURRENT)
   print(json.dumps({'id':jid,'status':CURRENT['status'],'quality':CURRENT.get('quality'),'error':CURRENT.get('error')},ensure_ascii=False));sys.exit(0 if CURRENT['status']=='review' else 1)
  else:
-  print('Virtual Studio: '+ORIGIN,flush=True);ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()
+  server=ThreadingHTTPServer(('127.0.0.1',PORT),Handler)
+  print('Virtual Studio: '+ORIGIN,flush=True)
+  if '--open' in sys.argv:
+   import webbrowser
+   threading.Timer(.5,lambda:webbrowser.open(ORIGIN)).start()
+  server.serve_forever()
