@@ -11,9 +11,17 @@ sys.path.insert(0,str(ROOT/'vendor'))
 from PIL import Image,ImageDraw,ImageFont,ImageOps
 import imageio_ffmpeg
 import studio_services as svc
+import content_control as cc
+import time,math
 FF=imageio_ffmpeg.get_ffmpeg_exe()
 ROLES=['Orchestrator','Account Auditor','Researcher','Strategist','Script Writer','Policy Auditor','Voice Studio','Video Producer','Quality Control','Analytics']
 LOCK=threading.RLock(); CURRENT=None; AUTH_BUSY=False; AUTH_RESULT=None; PORT=8899; ORIGIN=f'http://127.0.0.1:{PORT}'
+BATCH=None
+BATCH_FILE=WORK/"batch-state.json"
+try:
+ BATCH=json.loads(BATCH_FILE.read_text(encoding="utf-8"))
+ if BATCH.get("status")=="running":BATCH["status"]="interrupted";BATCH["error"]="Server restarted; do not resume automatically"
+except (OSError,ValueError,AttributeError):BATCH=None
 DEMO=[
  {'title':'AI bukan cuma chatbot','text':'AI bisa membantu mengoperasikan browser.'},
  {'title':'Buka halaman uji','text':'Sistem membaca halaman sandbox lokal.'},
@@ -127,9 +135,22 @@ def render(folder,scenes,durations,demo):
  ff(['-f','concat','-safe','1','-i',str(folder/'concat.txt'),'-c','copy','-movflags','+faststart',str(folder/'reel.mp4')])
  return start
 def audit(folder,dur,provider):
- p=folder/'reel.mp4';r=subprocess.run([FF,'-hide_banner','-i',str(p),'-f','null','-'],capture_output=True,text=True,timeout=180)
- if r.returncode or '720x1280' not in r.stderr or 'Audio:' not in r.stderr:raise RuntimeError('Video decode/format check failed')
- report={'decode_pass':True,'resolution':'720x1280','duration_planned_seconds':dur,'audio':provider,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size,'publication_approved':False,'human_review_required':True}
+ p=folder/'reel.mp4'
+ def measure(path):
+  r=subprocess.run([FF,'-hide_banner','-i',str(path),'-af','loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json','-f','null','-'],capture_output=True,text=True,timeout=180)
+  if r.returncode or '720x1280' not in r.stderr or 'Audio:' not in r.stderr:raise RuntimeError('Video decode/format check failed')
+  q=json.loads(re.findall(r'\{\s*"input_i"[\s\S]*?\}',r.stderr)[-1])
+  i,t=float(q['input_i']),float(q['input_tp'])
+  if not math.isfinite(i) or not math.isfinite(t) or i<-45:raise RuntimeError('Audio silent or invalid')
+  return i,t
+ i,t=measure(p)
+ if t>-1.5:
+  corrected=folder/'reel-corrected.mp4';gain=-2.5-t
+  ff(['-i',str(p),'-c:v','copy','-af',f'volume={gain:.3f}dB','-c:a','aac','-b:a','128k','-movflags','+faststart',str(corrected)])
+  i,t=measure(corrected)
+  if t>-1.5:raise RuntimeError('True peak exceeds gate after encoding')
+  corrected.replace(p)
+ report={'decode_pass':True,'audio_non_silent':True,'integrated_lufs':i,'true_peak_dbtp':t,'resolution':'720x1280','duration_planned_seconds':dur,'audio':provider,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size,'publication_approved':False,'commercial_rights_verified':False,'human_review_required':True}
  write(folder/'quality.json',json.dumps(report,indent=2));return report
 def pipeline(j,brief,manual):
  folder=WORK/j['id'];mode=j['mode'];live=mode in ('api','plan')
@@ -183,7 +204,7 @@ def pipeline(j,brief,manual):
   j['status']='failed';j['error']=type(e).__name__+': '+str(e)[:180];event(j,'Orchestrator','failed','Pipeline dihentikan')
  finally:
   with LOCK:save(j)
-def newjob(mode,brief,manual=None,model=None,use_trends=False):
+def newjob(mode,brief,manual=None,model=None,use_trends=False,from_batch=False):
  global CURRENT
  if mode not in ('demo','manual','api','plan'):raise ValueError('Invalid mode')
  if mode=='api' and not(os.environ.get('OPENAI_API_KEY') and os.environ.get('OPENAI_MODEL')):raise ValueError('Configure OPENAI_API_KEY and OPENAI_MODEL locally first')
@@ -192,10 +213,39 @@ def newjob(mode,brief,manual=None,model=None,use_trends=False):
   if not isinstance(model,str) or not model or len(model)>150:raise ValueError('Pilih model GPT dari daftar')
  if mode=='manual':manual=validate(manual)
  with LOCK:
+  if BATCH and BATCH.get('status')=='running' and not from_batch:raise ValueError('Antrean produksi sedang berjalan')
   if CURRENT and CURRENT['status']=='running':raise ValueError('Job sedang berjalan')
   j={'id':uuid.uuid4().hex[:12],'mode':mode,'model':model,'use_trends':bool(use_trends),'status':'running','agents':{r:{'status':'waiting','task':'Menunggu tugas'} for r in ROLES},'events':[],'started':now()}
   (WORK/j['id']).mkdir();CURRENT=j;save(j)
  threading.Thread(target=pipeline,args=(j,brief,manual),daemon=True).start();return j['id']
+def batch_save():
+ tmp=BATCH_FILE.with_suffix('.tmp');tmp.write_text(json.dumps(BATCH,ensure_ascii=False,indent=2),encoding='utf-8');tmp.replace(BATCH_FILE)
+def batch_worker(b,model,trends):
+ try:
+  for i,topic in enumerate(b['topics']):
+   with LOCK:b['current']=i+1;batch_save()
+   jid=newjob('plan',topic,model=model,use_trends=trends,from_batch=True)
+   with LOCK:b['jobs'].append(jid);batch_save()
+   while True:
+    with LOCK:status=CURRENT.get('status') if CURRENT and CURRENT['id']==jid else 'interrupted'
+    if status!='running':break
+    time.sleep(.7)
+   if status!='review':raise RuntimeError('Job '+jid+' '+status)
+   with LOCK:b['completed']+=1;batch_save()
+  with LOCK:b['status']='completed';batch_save()
+ except Exception as e:
+  with LOCK:b['status']='failed';b['error']=str(e)[:180];batch_save()
+def start_batch(topics,model,trends):
+ global BATCH
+ if not isinstance(topics,list) or not 1<=len(topics)<=7 or any(not isinstance(t,str) or not 1<=len(t.strip())<=1000 for t in topics):raise ValueError('Isi 1–7 topik, maksimal 1000 karakter per topik')
+ if not isinstance(model,str) or not model or len(model)>150:raise ValueError('Pilih model GPT')
+ with LOCK:
+  if AUTH_BUSY or (CURRENT and CURRENT['status']=='running') or (BATCH and BATCH.get('status')=='running'):raise ValueError('Studio sedang sibuk')
+  if not svc.plan('status').get('sharing'):raise ValueError('Hubungkan paket ChatGPT')
+  b={'id':uuid.uuid4().hex[:12],'topics':[t.strip() for t in topics],'status':'running','current':0,'completed':0,'jobs':[],'started':now()}
+  BATCH=b;batch_save()
+  threading.Thread(target=batch_worker,args=(b,model,bool(trends)),daemon=True).start()
+  return b['id']
 def getstate():
  with LOCK:
   if CURRENT:return json.loads(json.dumps(CURRENT))
@@ -240,6 +290,14 @@ class Handler(BaseHTTPRequestHandler):
   if not self.valid():return self.js({'error':'Forbidden host'},403)
   if self.path=='/':return self.reply((ROOT/'office.html').read_bytes(),'text/html; charset=utf-8')
   if self.path=='/state':return self.js(getstate())
+  if self.path=='/batch':
+   with LOCK:return self.js(BATCH or {'status':'idle','completed':0,'topics':[]})
+  if self.path=='/content/catalog':return self.js({'items':cc.catalog()})
+  cm=re.fullmatch(r'/content/(00[1-5]|job-[a-f0-9]{12})/(video|thumbnail)',self.path)
+  if cm:
+   p=cc.asset(cm[1],cm[2])
+   if p:return self.reply(p.read_bytes(),'video/mp4' if cm[2]=='video' else 'image/png')
+   return self.js({'error':'Not found'},404)
   if self.path=='/notebook/catalog':return self.js({'projects':notebook_catalog()})
   if self.path=='/chatgpt/status':
    if AUTH_BUSY:return self.js({'status':'connecting','sharing':False})
@@ -257,13 +315,29 @@ class Handler(BaseHTTPRequestHandler):
  def do_POST(self):
   if not self.valid() or self.headers.get('Origin')!=ORIGIN or self.headers.get('Content-Type')!='application/json':return self.js({'error':'Forbidden'},403)
   global AUTH_BUSY,AUTH_RESULT
+  if self.path=='/batch/run':
+   try:
+    n=int(self.headers.get('Content-Length','0'))
+    if not 0<n<=10000:raise ValueError('Invalid body')
+    d=json.loads(self.rfile.read(n))
+    if d.get('confirm_plan') is not True:raise ValueError('Persetujuan kuota paket ChatGPT diperlukan')
+    return self.js({'id':start_batch(d.get('topics'),d.get('model'),d.get('use_trends',False))},202)
+   except Exception as e:return self.js({'error':str(e)[:180]},400)
+  if self.path=='/content/review':
+   try:
+    n=int(self.headers.get('Content-Length','0'))
+    if not 0<n<=2000:raise ValueError('Invalid body')
+    d=json.loads(self.rfile.read(n))
+    with LOCK:result=cc.approve(d.get('id'),d.get('sha256'),d.get('status'))
+    return self.js(result)
+   except (ValueError,TypeError,OSError):return self.js({'error':'Review rejected'},400)
   if self.path=='/chatgpt/signin':
    with LOCK:
-    if AUTH_BUSY or (CURRENT and CURRENT['status']=='running'):return self.js({'error':'Studio busy'},409)
+    if AUTH_BUSY or (CURRENT and CURRENT['status']=='running') or (BATCH and BATCH.get('status')=='running'):return self.js({'error':'Studio busy'},409)
     AUTH_BUSY=True;AUTH_RESULT=None;threading.Thread(target=auth_worker,daemon=True).start()
    return self.js({'status':'connecting'},202)
   if self.path=='/chatgpt/disconnect':
-   if AUTH_BUSY or (CURRENT and CURRENT['status']=='running'):return self.js({'error':'Studio busy'},409)
+   if AUTH_BUSY or (CURRENT and CURRENT['status']=='running') or (BATCH and BATCH.get('status')=='running'):return self.js({'error':'Studio busy'},409)
    try:return self.js(svc.plan('disconnect'))
    except Exception:return self.js({'error':'Disconnect failed'},400)
   m=re.fullmatch(r'/notebook/open/([a-zA-Z0-9_-]{1,64})/(audio|video|report)',self.path)
