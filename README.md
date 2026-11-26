@@ -29,3 +29,6 @@ Ten characters at individual desks, a meeting room and separate render area. Bac
 ## Acceptance
 Run node chatgpt-plan.mjs selftest (DPAPI only), python -B studio_services.py --trends, python -B studio_services.py --voice, python -B app.py --demo --trends. Optional browser test: start server, then node test-ui.cjs with PLAYWRIGHT_MODULE set to an existing Playwright installation. Tests check two production jobs, handoff replay, real trend feed, media decode and local consent/origin validation. No authenticated model inference is claimed unless the owner signs in and a real request completes.
 The prior Control Center at D:\AI-COMPUTER-CONTROL remains independent. No DC required during normal Studio operation. Public repository contains source and installers only; private data, credentials, media and model binaries are excluded.
+
+## Desktop shortcut
+Run `python -B make-icon.py` and `powershell -NoProfile -File UPDATE-DESKTOP.ps1` after installation or an icon design change. `START-STUDIO.cmd` refreshes the desktop shortcut on startup and recreates the icon if missing. The shortcut points to the stable D-drive launcher. On OneDrive-managed desktops the small .lnk file may reside on C:, while the icon and program remain on D:.
